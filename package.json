@@ -1,0 +1,29 @@
+{
+  "name": "idx-scrapper",
+  "version": "1.0.0",
+  "main": "scraper.ts",
+  "scripts": {
+    "test": "jest",
+    "start": "ts-node src/scraper.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@types/node": "^24.5.2",
+    "dotenv": "^17.2.3",
+    "node-mailjet": "^6.0.9",
+    "pdf-parse": "^1.1.1",
+    "puppeteer": "^24.22.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/pdf-parse": "^1.1.5",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.4"
+  }
+}
