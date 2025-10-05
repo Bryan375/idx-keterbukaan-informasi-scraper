@@ -1,7 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import pdf from 'pdf-parse';
-import * as fs from "node:fs";
-import * as path from "node:path";
 import { AnnouncementSentiment } from "../types/announcement";
 import * as dotenv from "dotenv";
 
@@ -9,7 +7,26 @@ dotenv.config();
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_APP_KEY || '');
 const GEMINI_MODEL = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL_NAME || 'gemini-1.5-flash-latest' });
-const PROMPT_TEMPLATE = fs.readFileSync(path.resolve(__dirname, '../prompt.txt'), 'utf-8');
+const PROMPT_TEMPLATE = `
+Analyze the following corporate announcement from the Indonesia Stock Exchange (IDX).
+Determine if it describes a significant, actionable event for an investor. Focus on identifying events like:
+- Rights Issue (PMHMETD)
+- Private Placement (PMTHMETD)
+- Acquisition or Merger
+- Stock Split
+- Share Buyback
+- Significant change in ownership (Perubahan Kepemilikan Saham)
+- Potential Backdoor Listing
+- Joint Venture
+
+Based on the text, answer with a JSON object in the following format and nothing else:
+"{ "isInteresting": boolean, "reasoning": "Explain why this is or is not an interesting event for an investor." }"
+
+Please provide the response in a valid JSON format like this
+"{ "isInteresting": boolean, "reasoning": "Explain why this is or is not an interesting event for an investor." }"
+
+For all reasoning, please provide the reasoning in Indonesian.
+`
 
 export async function analyzePdfBuffer(buffer: Buffer): Promise<AnnouncementSentiment> {
     try {
