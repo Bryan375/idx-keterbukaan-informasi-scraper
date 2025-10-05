@@ -6,7 +6,7 @@
     "test": "jest",
     "build": "tsc && copyfiles -u 1 src/**/*.txt dist",
     "start": "functions-framework --target=idxScraper",
-    "postinstall": "puppeteer browsers install chrome"
+    "postinstall": "npx puppeteer browsers install chrome"
   },
   "keywords": [],
   "author": "",
