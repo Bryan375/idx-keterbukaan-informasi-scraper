@@ -1,48 +1,21 @@
 import puppeteer, {Browser, Page} from 'puppeteer';
 import {GoogleGenerativeAI} from "@google/generative-ai";
 import * as dotenv from 'dotenv';
-import pdf from 'pdf-parse';
-import Mailjet from "node-mailjet";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import {AnnouncementSentiment, Announcement} from "./types/announcement";
+import {TARGET_URL, NOISE_PATTERNS} from "./config/constants";
+import {getFormattedDate} from "./helpers/date.helper";
+import {sendEmailReport} from "./services/email.service";
+import {analyzePdfBuffer} from "./services/gemini.service";
 
 dotenv.config();
 
-const TARGET_URL = 'https://www.idx.co.id/id/perusahaan-tercatat/keterbukaan-informasi/'
-const NOISE_PATTERNS: string[] = [
-    'Laporan Bulanan Registrasi Pemegang Efek',
-    'Laporan Harian atas Nilai Aktiva Bersih',
-    'Laporan Jumlah Peredaran Unit Penyertaan',
-    'Laporan Jumlah Structured Warrant Beredar',
-    'Laporan Kepemilikan Saham',
-    'Perubahan Corporate Secretary',
-    'Perubahan Internal Audit',
-    'Perubahan Komite Audit',
-    'Perubahan Komite Nominasi dan Remunerasi',
-    'Penyampaian Bukti Iklan',
-    'Penyampaian Materi Public Expose',
-    'Informasi Kupon',
-    'Jatuh Tempo',
-    'Laporan Bulanan Aktivitas Eksplorasi'
-];
 const TODAY_DATE = getFormattedDate(new Date());
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_APP_KEY || '');
 const GEMINI_MODEL = genAI.getGenerativeModel({model: process.env.GEMINI_MODEL_NAME || 'gemini-2.5-flash-lite'});
 const PROMPT_TEMPLATE = fs.readFileSync(path.resolve(__dirname, '../prompt.txt'), 'utf-8');
-
-
-interface AnnouncementSentiment {
-    isInteresting: boolean;
-    reasoning?: string;
-}
-
-interface Announcement {
-    time: string;
-    title: string;
-    attachments: { text: string; url: string }[];
-    sentiment: AnnouncementSentiment;
-}
 
 
 async function analyzeDocument(page: Page, url: string, title: string, attachmentNumber: number): Promise<AnnouncementSentiment> {
@@ -69,39 +42,7 @@ async function analyzeDocument(page: Page, url: string, title: string, attachmen
         }, url);
 
         const buffer = Buffer.from(pdfBufferAsBase64, 'base64');
-
-        const data = await pdf(buffer);
-        const documentText = data.text;
-
-        let result;
-
-        if (documentText.trim().length < 100) {
-            console.log('📝 PDF appears to be a scanned image. Switching to multimodal analysis.');
-            const imagePart = {
-                inlineData: {
-                    data: buffer.toString('base64'),
-                    mimeType: 'application/pdf'
-                }
-            };
-            result = await GEMINI_MODEL.generateContent([PROMPT_TEMPLATE, imagePart]);
-        } else {
-            const prompt = `${PROMPT_TEMPLATE}\n\nDocument Text:\n--- \n${documentText.substring(0, 10000)} \n--- `;
-            result = await GEMINI_MODEL.generateContent(prompt);
-        }
-
-        const responseText = result.response.text();
-
-        const jsonRegex = /^```json\s*|\s*```$/g;
-        const jsonString = responseText.replaceAll(jsonRegex, '');
-
-        const jsonResponse = JSON.parse(jsonString);
-        console.log('Result:', JSON.stringify(jsonResponse, null, 2));
-
-        return {
-            isInteresting: jsonResponse.isInteresting || false,
-            reasoning: jsonResponse.reasoning || 'No reasoning provided.'
-        };
-
+        return await analyzePdfBuffer(Buffer.from(buffer));
 
     } catch (error) {
         console.error(`❌ Failed to analyze document ${title}-number(${attachmentNumber}) with this url: ${url}`, error);
@@ -109,14 +50,6 @@ async function analyzeDocument(page: Page, url: string, title: string, attachmen
     }
 }
 
-
-export function getFormattedDate(date: Date): string {
-    const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const day = (date.getDate()).toString().padStart(2, '0');
-
-    return `${year}-${month}-${day}`;
-}
 
 export async function clickDateInputField(page: Page): Promise<boolean> {
     const dateInput = await page.$('input[name="date"]');
@@ -168,79 +101,6 @@ export async function scrapeCurrentPage(page: Page): Promise<Omit<Announcement, 
 function delay(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
-
-function formatAnnouncementForEmail(announcements: Announcement[]): string {
-    if (announcements.length === 0) return '<li>None</li>';
-    return announcements.map(ann => `
-            <li>
-                <b>${ann.title}</b><br/>
-                <i>Reasoning: ${ann.sentiment.reasoning}</i><br/>
-                <a href="${ann.attachments.find(a => a.text.toLowerCase().includes('.pdf'))?.url || '#'}">Link to PDF</a>
-            </li>
-        `).join('');
-}
-
-async function sendEmailReport(
-    interestingAnnouncements: Announcement[],
-    uninterestingAnnouncements: Announcement[],
-    skippedAnnouncements: Announcement[],
-    failedAnnouncements: Announcement[],
-
-): Promise<void> {
-    const { MAILJET_API_KEY, MAILJET_API_SECRET, SENDER_EMAIL, RECEIVER_EMAIL } = process.env;
-
-    if (!MAILJET_API_KEY || !MAILJET_API_SECRET || !SENDER_EMAIL || !RECEIVER_EMAIL) {
-        console.error('Email credentials (MAILJET_API_KEY, MAILJET_API_SECRET, SENDER_EMAIL, RECEIVER_EMAIL) are not set. Skipping email report.');
-    }
-
-    const mailJet = new Mailjet({
-        apiKey: MAILJET_API_KEY,
-        apiSecret: MAILJET_API_SECRET,
-    });
-
-    const htmlContent = `
-        <h1>IDX Scraper Report - ${new Date().toLocaleDateString('id-ID')}</h1>
-        
-        <h2>✨ ${interestingAnnouncements.length} Interesting Announcements</h2>
-        <ul>${formatAnnouncementForEmail(interestingAnnouncements)}</ul>
-        
-        <h2>🧐 ${uninterestingAnnouncements.length} Uninteresting Announcements (Analyzed)</h2>
-        <ul>${formatAnnouncementForEmail(uninterestingAnnouncements)}</ul>
-        
-        <h2>🔇 ${skippedAnnouncements.length} Skipped Announcements (Filtered)</h2>
-        <ul>${formatAnnouncementForEmail(skippedAnnouncements)}</ul>
-        
-        <h2>❌ ${failedAnnouncements.length} Failed Announcements</h2>
-        <ul>${formatAnnouncementForEmail(failedAnnouncements)}</ul>
-    `;
-
-    const request = mailJet
-        .post('send', { version: 'v3.1'})
-        .request({
-            Messages: [
-                {
-                    From: {
-                        Email: SENDER_EMAIL,
-                        Name: "Ayang"
-                    },
-                    To: [
-                        {
-                            Email: RECEIVER_EMAIL,
-                        },
-                    ],
-                    Subject: `IDX Scraper Report: ${interestingAnnouncements.length} interesting announcements found!`,
-                    HTMLPart: htmlContent,
-                },
-            ],
-        });
-
-    request.then(() => {
-        console.log('✅ Email report sent successfully via Mailjet!');
-    }).catch((error) => {
-        console.error('❌ Failed to send email report via Mailjet:', error);
-    });
-}
-
 
 export async function scrapeAnnouncements() {
     if (!process.env.GEMINI_APP_KEY) {
