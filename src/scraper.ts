@@ -5,6 +5,7 @@ import {TARGET_URL, NOISE_PATTERNS} from "./config/constants";
 import {getFormattedDate} from "./helpers/date.helper";
 import {sendEmailReport} from "./services/email.service";
 import {analyzePdfBuffer} from "./services/gemini.service";
+import {HttpFunction} from "@google-cloud/functions-framework";
 
 dotenv.config();
 
@@ -152,20 +153,22 @@ function logAnnouncements(interestingAnnouncements: Announcement[],
     }
 }
 
-export async function scrapeAnnouncements() {
+export const idxScraper: HttpFunction = async (req, res) => {
     if (!process.env.GEMINI_APP_KEY) {
         console.error('❌ GEMINI_APP_KEY is not set');
         return;
     }
+    let browser: Browser | null = null;
 
-    console.log('🚀 Memulai browser...');
-    const browser: Browser = await puppeteer.launch({
-        headless: false,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
-    const page: Page = await browser.newPage();
+    console.log('🚀 Starting IDX Scraper Cloud Function...');
 
     try {
+        browser = await puppeteer.launch({
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        });
+        const page: Page = await browser.newPage();
+
         await page.goto(TARGET_URL, {waitUntil: 'networkidle2'});
 
         const successClickedDate = await clickDateInputField(page);
@@ -237,14 +240,16 @@ export async function scrapeAnnouncements() {
             failedAnnouncements,
         )
 
+        res.status(200).send('Scraping job completed successfully.');
+
 
     } catch (error) {
-        console.error('❌ Terjadi kesalahan:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error('❌ An unexpected error occurred during scraping:', errorMessage);
+        res.status(500).send(`An unexpected error occurred: ${errorMessage}`);
     } finally {
-        await browser.close()
+        if (browser) {
+            await browser.close()
+        }
     }
-
-}
-
-scrapeAnnouncements()
-
+};
