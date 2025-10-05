@@ -4,7 +4,7 @@
   "main": "dist/scraper.js",
   "scripts": {
     "test": "jest",
-    "build": "tsc && copyfiles -u 1 src/**/*.txt dist",
+    "build": "tsc",
     "start": "functions-framework --target=idxScraper",
     "postinstall": "npx puppeteer browsers install chrome"
   },

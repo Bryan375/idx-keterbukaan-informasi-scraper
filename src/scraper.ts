@@ -164,7 +164,7 @@ export const idxScraper: HttpFunction = async (req, res) => {
 
     try {
         browser = await puppeteer.launch({
-            headless: true,
+            headless: false,
             args: ['--no-sandbox', '--disable-setuid-sandbox'],
         });
         const page: Page = await browser.newPage();
