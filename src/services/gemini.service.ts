@@ -9,7 +9,7 @@ dotenv.config();
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_APP_KEY || '');
 const GEMINI_MODEL = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL_NAME || 'gemini-1.5-flash-latest' });
-const PROMPT_TEMPLATE = fs.readFileSync(path.resolve(__dirname, '../../prompt.txt'), 'utf-8');
+const PROMPT_TEMPLATE = fs.readFileSync(path.resolve(__dirname, '../prompt.txt'), 'utf-8');
 
 export async function analyzePdfBuffer(buffer: Buffer): Promise<AnnouncementSentiment> {
     try {
