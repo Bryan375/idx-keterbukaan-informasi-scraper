@@ -1,4 +1,5 @@
-import {getFormattedDate, hasNextPage} from "../scraper";
+import {hasNextPage} from "../scraper";
+import {getFormattedDate} from "../helpers/date.helper";
 
 describe('getTodayDate', () => {
     it('should return today date in YYYY-MM-DD format', () => {
