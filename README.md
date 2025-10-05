@@ -1,0 +1,1 @@
+# idx-keterbukaan-informasi-scraper
