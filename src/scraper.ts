@@ -1,8 +1,5 @@
 import puppeteer, {Browser, Page} from 'puppeteer';
-import {GoogleGenerativeAI} from "@google/generative-ai";
 import * as dotenv from 'dotenv';
-import * as fs from "node:fs";
-import * as path from "node:path";
 import {AnnouncementSentiment, Announcement} from "./types/announcement";
 import {TARGET_URL, NOISE_PATTERNS} from "./config/constants";
 import {getFormattedDate} from "./helpers/date.helper";
@@ -12,11 +9,6 @@ import {analyzePdfBuffer} from "./services/gemini.service";
 dotenv.config();
 
 const TODAY_DATE = getFormattedDate(new Date());
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_APP_KEY || '');
-const GEMINI_MODEL = genAI.getGenerativeModel({model: process.env.GEMINI_MODEL_NAME || 'gemini-2.5-flash-lite'});
-const PROMPT_TEMPLATE = fs.readFileSync(path.resolve(__dirname, '../prompt.txt'), 'utf-8');
-
 
 async function analyzeDocument(page: Page, url: string, title: string, attachmentNumber: number): Promise<AnnouncementSentiment> {
     try {
@@ -102,6 +94,64 @@ function delay(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+async function extractAllAnnouncements(page: Page): Promise<Omit<Announcement, 'sentiment'>[]> {
+    const allAnnouncements: Omit<Announcement, 'sentiment'>[] = [];
+
+    await page.waitForNetworkIdle({idleTime: 1000});
+
+    do {
+        const currentPageData = await scrapeCurrentPage(page);
+
+        allAnnouncements.push(...currentPageData);
+
+        if (await hasNextPage(page)) {
+            await goToNextPage(page);
+
+            await page.waitForNetworkIdle({idleTime: 1500});
+
+        } else {
+            break;
+        }
+    } while (true);
+
+    return allAnnouncements;
+}
+
+function logAnnouncements(interestingAnnouncements: Announcement[],
+                          uninterestingAnnouncements: Announcement[],
+                          skippedAnnouncements: Announcement[],
+                          failedAnnouncements: Announcement[],): void {
+
+    console.log(`✨ Ditemukan ${interestingAnnouncements.length} pengumuman menarik berdasarkan analisis AI:`);
+    for (const ann of interestingAnnouncements) {
+        console.log(`- 📢 Judul: ${ann.title}`);
+        console.log(`  - 🤔 Alasan: ${ann.sentiment.reasoning}`);
+        console.log(`  - 🔗 Link: ${ann.attachments.find(a => a.text.toLowerCase().includes('.pdf'))?.url || 'N/A'}\n`);
+    }
+
+    console.log(`\n---`);
+    console.log(`
+🧐 Ditemukan ${uninterestingAnnouncements.length} pengumuman yang dinilai tidak menarik oleh AI:`);
+    for (const ann of uninterestingAnnouncements) {
+        console.log(`- 📄 Judul: ${ann.title}`);
+        console.log(`  - 🤔 Alasan: ${ann.sentiment.reasoning}`);
+    }
+
+    console.log(`\n---`);
+    console.log(`
+🔇 Ditemukan ${skippedAnnouncements.length} pengumuman yang dilewati berdasarkan judul:`);
+    for (const ann of skippedAnnouncements) {
+        console.log(`- 📄 Judul: ${ann.title}`);
+    }
+
+    console.log(`\n---`);
+    console.log(`
+❌ Ditemukan ${failedAnnouncements.length} pengumuman yang gagal dianalisis oleh AI:`);
+    for (const ann of failedAnnouncements) {
+        console.log(`- 📄 Judul: ${ann.title}`);
+    }
+}
+
 export async function scrapeAnnouncements() {
     if (!process.env.GEMINI_APP_KEY) {
         console.error('❌ GEMINI_APP_KEY is not set');
@@ -121,28 +171,10 @@ export async function scrapeAnnouncements() {
         const successClickedDate = await clickDateInputField(page);
 
         if (!successClickedDate) {
-            console.error('❌ Gagal mengekstrak informasi dari halaman');
-            return;
+            throw new Error('Failed to find or click the date input field on the page.')
         }
 
-        const allAnnouncements: Omit<Announcement, 'sentiment'>[] = [];
-
-        await page.waitForNetworkIdle({idleTime: 1000});
-
-        do {
-            const currentPageData = await scrapeCurrentPage(page);
-
-            allAnnouncements.push(...currentPageData);
-
-            if (await hasNextPage(page)) {
-                await goToNextPage(page);
-
-                await page.waitForNetworkIdle({idleTime: 1000});
-
-            } else {
-                break;
-            }
-        } while (true);
+        const allAnnouncements: Omit<Announcement, 'sentiment'>[] = await extractAllAnnouncements(page);
 
         const noiseRegex = new RegExp(NOISE_PATTERNS.join('|'), 'i');
         const analyzedAnnouncements: Announcement[] = [];
@@ -184,40 +216,19 @@ export async function scrapeAnnouncements() {
         const failedAnnouncements = analyzedAnnouncements.filter(ann => ann.sentiment.reasoning === 'Analysis failed.');
         const uninterestingAnalyzedAnnouncements = analyzedAnnouncements.filter(ann => (!ann.sentiment.isInteresting && ann.sentiment.reasoning !== 'Analysis failed.') || (!ann.sentiment.isInteresting && ann.sentiment.reasoning !== 'Filtered out by title noise pattern.'));
 
+
         console.log(`
                 ========================================
                             SCRAPING COMPLETE
                 ========================================
         `);
 
-        console.log(`✨ Ditemukan ${interestingAnnouncements.length} pengumuman menarik berdasarkan analisis AI:`);
-        for (const ann of interestingAnnouncements) {
-            console.log(`- 📢 Judul: ${ann.title}`);
-            console.log(`  - 🤔 Alasan: ${ann.sentiment.reasoning}`);
-            console.log(`  - 🔗 Link: ${ann.attachments.find(a => a.text.toLowerCase().includes('.pdf'))?.url || 'N/A'}\n`);
-        }
-
-        console.log(`\n---`);
-        console.log(`
-🧐 Ditemukan ${uninterestingAnalyzedAnnouncements.length} pengumuman yang dinilai tidak menarik oleh AI:`);
-        for (const ann of uninterestingAnalyzedAnnouncements) {
-            console.log(`- 📄 Judul: ${ann.title}`);
-            console.log(`  - 🤔 Alasan: ${ann.sentiment.reasoning}`);
-        }
-
-        console.log(`\n---`);
-        console.log(`
-🔇 Ditemukan ${skippedAnnouncements.length} pengumuman yang dilewati berdasarkan judul:`);
-        for (const ann of skippedAnnouncements) {
-            console.log(`- 📄 Judul: ${ann.title}`);
-        }
-
-        console.log(`\n---`);
-        console.log(`
-❌ Ditemukan ${failedAnnouncements.length} pengumuman yang gagal dianalisis oleh AI:`);
-        for (const ann of failedAnnouncements) {
-            console.log(`- 📄 Judul: ${ann.title}`);
-        }
+        logAnnouncements(
+            interestingAnnouncements,
+            uninterestingAnalyzedAnnouncements,
+            skippedAnnouncements,
+            failedAnnouncements,
+        )
 
         await sendEmailReport(
             interestingAnnouncements,
