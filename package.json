@@ -5,7 +5,7 @@
   "scripts": {
     "test": "jest",
     "build": "tsc",
-    "start": "node dist/scraper.js"
+    "start": "functions-framework --target=idxScraper",
   },
   "keywords": [],
   "author": "",
