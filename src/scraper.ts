@@ -1,4 +1,3 @@
-import puppeteer, {Browser, Page} from 'puppeteer';
 import * as dotenv from 'dotenv';
 import {AnnouncementSentiment, Announcement} from "./types/announcement";
 import {TARGET_URL, NOISE_PATTERNS} from "./config/constants";
@@ -6,6 +5,7 @@ import {getFormattedDate} from "./helpers/date.helper";
 import {sendEmailReport} from "./services/email.service";
 import {analyzePdfBuffer} from "./services/gemini.service";
 import {HttpFunction} from "@google-cloud/functions-framework";
+import puppeteer, {Browser, Page} from "puppeteer";
 
 dotenv.config();
 
@@ -174,7 +174,8 @@ export const idxScraper: HttpFunction = async (req, res) => {
         const successClickedDate = await clickDateInputField(page);
 
         if (!successClickedDate) {
-            throw new Error('Failed to find or click the date input field on the page.')
+            console.log('Failed to find or click the date input field on the page.');
+            return;
         }
 
         const allAnnouncements: Omit<Announcement, 'sentiment'>[] = await extractAllAnnouncements(page);

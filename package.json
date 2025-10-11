@@ -6,7 +6,7 @@
     "test": "jest",
     "build": "tsc",
     "start": "functions-framework --target=idxScraper",
-    "postinstall": "npx puppeteer browsers install chrome"
+    "dev": "tsc && functions-framework --target=idxScraper"
   },
   "keywords": [],
   "author": "",
@@ -26,7 +26,6 @@
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/pdf-parse": "^1.1.5",
-    "copyfiles": "^2.4.1",
     "jest": "^30.2.0",
     "ts-jest": "^29.4.4"
   }
