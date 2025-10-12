@@ -15,12 +15,11 @@
   "dependencies": {
     "@google-cloud/functions-framework": "^3.4.0",
     "@google/generative-ai": "^0.24.1",
-    "@sparticuz/chromium": "^141.0.0",
     "@types/node": "^24.5.2",
     "dotenv": "^17.2.3",
     "node-mailjet": "^6.0.9",
     "pdf-parse": "^1.1.1",
-    "puppeteer-core": "^10.4.0",
+    "puppeteer": "^24.24.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.2"
   },
