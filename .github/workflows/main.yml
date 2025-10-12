@@ -8,7 +8,7 @@ on:
 
 jobs:
   scrape:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
@@ -41,15 +41,6 @@ jobs:
           SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
           RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
         run: node dist/scraper.js
-
-      - name: Upload error artifacts
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: error-artifacts
-          path: |
-            error_screenshot.png
-            error_page.html
 
       - name: Upload screenshot artifact
         if: success()
