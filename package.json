@@ -6,14 +6,13 @@
     "test": "jest",
     "build": "tsc",
     "start": "functions-framework --target=idxScraper",
-    "dev": "tsc && functions-framework --target=idxScraper"
+    "dev": "tsc && node dist/scraper.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@google-cloud/functions-framework": "^3.4.0",
     "@google/generative-ai": "^0.24.1",
     "@types/node": "^24.5.2",
     "dotenv": "^17.2.3",

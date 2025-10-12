@@ -4,7 +4,6 @@ import {TARGET_URL, NOISE_PATTERNS} from "./config/constants";
 import {getFormattedDate} from "./helpers/date.helper";
 import {sendEmailReport} from "./services/email.service";
 import {analyzePdfBuffer} from "./services/gemini.service";
-import {HttpFunction} from "@google-cloud/functions-framework";
 import puppeteer, {Browser, Page} from "puppeteer";
 
 
@@ -211,7 +210,7 @@ export async function analyzeAnnouncements(page: Page,allAnnouncements: Omit<Ann
 
 }
 
-export const idxScraper: HttpFunction = async (req, res) => {
+export const idxScraper = async () => {
     if (!process.env.GEMINI_APP_KEY) {
         console.error('❌ GEMINI_APP_KEY is not set');
         return;
@@ -283,5 +282,5 @@ export const idxScraper: HttpFunction = async (req, res) => {
 
 if (require.main === module) {
     console.log("🚀 Running scraper directly via node...");
-    idxScraper(null as any, null as any);
+    idxScraper();
 }
