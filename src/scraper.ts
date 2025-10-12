@@ -4,11 +4,8 @@ import {TARGET_URL, NOISE_PATTERNS} from "./config/constants";
 import {getFormattedDate} from "./helpers/date.helper";
 import {sendEmailReport} from "./services/email.service";
 import {analyzePdfBuffer} from "./services/gemini.service";
-import puppeteer from 'puppeteer-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-import {Browser, Page} from "puppeteer";
+import puppeteer, {Browser, Page} from "puppeteer";
 
-puppeteer.use(StealthPlugin());
 
 dotenv.config();
 
@@ -225,6 +222,7 @@ export const idxScraper = async () => {
 
     try {
         browser = await puppeteer.launch({
+            headless: true,
             args: ['--no-sandbox', '--disable-setuid-sandbox'],
         });
 
