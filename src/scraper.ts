@@ -4,7 +4,12 @@ import {TARGET_URL, NOISE_PATTERNS} from "./config/constants";
 import {getFormattedDate} from "./helpers/date.helper";
 import {sendEmailReport} from "./services/email.service";
 import {analyzePdfBuffer} from "./services/gemini.service";
-import puppeteer, {Browser, Page} from "puppeteer";
+
+import puppeteer from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import {Browser, Page} from "puppeteer";
+
+puppeteer.use(StealthPlugin());
 
 
 dotenv.config();
@@ -243,6 +248,26 @@ export const idxScraper = async () => {
         await page.setUserAgent({userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/57.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36'})
 
         await page.goto(TARGET_URL, {waitUntil: 'networkidle0'});
+
+        try {
+            console.log('Checking for Cloudflare challenge...');
+            const iframeHandle = await page.waitForSelector('iframe[src*="challenges.cloudflare.com"]', { timeout: 5000 });
+
+            if (iframeHandle) {
+                const iframe = await iframeHandle.contentFrame();
+                if (iframe) {
+                    // Wait for the checkbox inside the iframe and click it
+                    const checkbox = await iframe.waitForSelector('input[type="checkbox"]', { timeout: 5000 });
+                    console.log('Cloudflare challenge found. Attempting to click checkbox...');
+                    if (checkbox) await checkbox.click();
+                    // Wait for the navigation that happens after a successful click
+                    await page.waitForNavigation({ waitUntil: 'networkidle2' });
+                    console.log('Cloudflare challenge likely passed!');
+                }
+            }
+        } catch (error) {
+            console.log('No Cloudflare challenge detected or failed to click, continuing...');
+        }
 
         const successClickedDate = await clickDateInputField(page);
 
