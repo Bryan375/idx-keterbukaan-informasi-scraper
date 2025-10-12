@@ -17,6 +17,7 @@
     "@google/generative-ai": "^0.24.1",
     "@types/node": "^24.5.2",
     "dotenv": "^17.2.3",
+    "express": "^5.1.0",
     "node-mailjet": "^6.0.9",
     "pdf-parse": "^1.1.1",
     "puppeteer": "^24.24.0",

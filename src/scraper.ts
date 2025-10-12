@@ -277,3 +277,8 @@ export const idxScraper: HttpFunction = async (req, res) => {
         }
     }
 };
+
+if (require.main === module) {
+    console.log("🚀 Running scraper directly via node...");
+    idxScraper(null as any, null as any);
+}
