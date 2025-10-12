@@ -251,18 +251,22 @@ export const idxScraper = async () => {
 
         try {
             console.log('Checking for Cloudflare challenge...');
-            const iframeHandle = await page.waitForSelector('iframe[src*="challenges.cloudflare.com"]', { timeout: 5000 });
+            const iframeHandle = await page.waitForSelector('iframe[src*="challenges.cloudflare.com"]', { timeout: 7000 });
 
             if (iframeHandle) {
+                console.log('✅ Cloudflare challenge detected. Attempting to solve...');
                 const iframe = await iframeHandle.contentFrame();
                 if (iframe) {
                     // Wait for the checkbox inside the iframe and click it
                     const checkbox = await iframe.waitForSelector('input[type="checkbox"]', { timeout: 5000 });
                     console.log('Cloudflare challenge found. Attempting to click checkbox...');
                     if (checkbox) await checkbox.click();
+                    console.log('✅ Checkbox clicked. Waiting for navigation...');
+
                     // Wait for the navigation that happens after a successful click
-                    await page.waitForNavigation({ waitUntil: 'networkidle2' });
-                    console.log('Cloudflare challenge likely passed!');
+                    await page.waitForNavigation({ timeout: 20000, waitUntil: 'networkidle2' });
+
+                    console.log('✅ Navigation complete. Cloudflare challenge passed!');
                 }
             }
         } catch (error) {
