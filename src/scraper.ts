@@ -225,7 +225,6 @@ export const idxScraper = async () => {
 
     try {
         browser = await puppeteer.launch({
-            headless: true,
             args: ['--no-sandbox', '--disable-setuid-sandbox'],
         });
 
@@ -236,12 +235,12 @@ export const idxScraper = async () => {
 
         await page.goto(TARGET_URL, {waitUntil: 'networkidle2'});
 
-        // const successClickedDate = await clickDateInputField(page);
-        //
-        // if (!successClickedDate) {
-        //     console.log('Failed to find or click the date input field on the page.');
-        //     return;
-        // }
+        const successClickedDate = await clickDateInputField(page);
+
+        if (!successClickedDate) {
+            console.log('Failed to find or click the date input field on the page.');
+            return;
+        }
 
         const allAnnouncements: Omit<Announcement, 'sentiment'>[] = await extractAllAnnouncements(page);
         console.log(`Total of announcements: ${allAnnouncements.length}`)
