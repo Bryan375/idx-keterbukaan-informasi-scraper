@@ -63,12 +63,6 @@ export async function clickDateInputField(page: Page): Promise<boolean> {
     } catch (error) {
         console.error("❌ Failed to find or click the date input field on the page.", error);
 
-        console.log("📸 Taking a screenshot of the failure page...");
-        await page.screenshot({ path: 'error_screenshot.png', fullPage: true });
-        console.log("📄 Dumping page HTML...");
-        const html = await page.content();
-        require('node:fs').writeFileSync('error_page.html', html);
-
         return false;
     }
 }
@@ -242,12 +236,12 @@ export const idxScraper = async () => {
 
         await page.goto(TARGET_URL, {waitUntil: 'networkidle2'});
 
-        const successClickedDate = await clickDateInputField(page);
-
-        if (!successClickedDate) {
-            console.log('Failed to find or click the date input field on the page.');
-            return;
-        }
+        // const successClickedDate = await clickDateInputField(page);
+        //
+        // if (!successClickedDate) {
+        //     console.log('Failed to find or click the date input field on the page.');
+        //     return;
+        // }
 
         const allAnnouncements: Omit<Announcement, 'sentiment'>[] = await extractAllAnnouncements(page);
         console.log(`Total of announcements: ${allAnnouncements.length}`)
