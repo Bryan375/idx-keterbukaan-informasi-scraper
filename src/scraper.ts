@@ -4,8 +4,11 @@ import {TARGET_URL, NOISE_PATTERNS} from "./config/constants";
 import {getFormattedDate} from "./helpers/date.helper";
 import {sendEmailReport} from "./services/email.service";
 import {analyzePdfBuffer} from "./services/gemini.service";
-import puppeteer, {Browser, Page} from "puppeteer";
+import puppeteer from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import {Browser, Page} from "puppeteer";
 
+puppeteer.use(StealthPlugin());
 
 dotenv.config();
 
@@ -59,6 +62,13 @@ export async function clickDateInputField(page: Page): Promise<boolean> {
         return true;
     } catch (error) {
         console.error("❌ Failed to find or click the date input field on the page.", error);
+
+        console.log("📸 Taking a screenshot of the failure page...");
+        await page.screenshot({ path: 'error_screenshot.png', fullPage: true });
+        console.log("📄 Dumping page HTML...");
+        const html = await page.content();
+        require('node:fs').writeFileSync('error_page.html', html);
+
         return false;
     }
 }
