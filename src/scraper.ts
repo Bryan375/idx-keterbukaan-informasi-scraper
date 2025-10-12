@@ -6,8 +6,8 @@ import {sendEmailReport} from "./services/email.service";
 import {analyzePdfBuffer} from "./services/gemini.service";
 import {HttpFunction} from "@google-cloud/functions-framework";
 
-import chromium from 'chrome-aws-lambda';
 import puppeteer, {Browser, Page} from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
 
 dotenv.config();
 
@@ -217,15 +217,11 @@ export const idxScraper: HttpFunction = async (req, res) => {
     console.log('🚀 Starting IDX Scraper Cloud Function...');
 
     try {
-        // browser = await puppeteer.launch({
-        //     headless: false,
-        //     args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        // });
+        let s = await chromium.executablePath();
         browser = await puppeteer.launch({
             args: chromium.args,
-            defaultViewport: chromium.defaultViewport,
-            executablePath: await chromium.executablePath,
-            headless: chromium.headless,
+            executablePath: s,
+            headless: true
         });
 
         const page: Page = await browser.newPage();
