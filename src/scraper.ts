@@ -5,7 +5,9 @@ import {getFormattedDate} from "./helpers/date.helper";
 import {sendEmailReport} from "./services/email.service";
 import {analyzePdfBuffer} from "./services/gemini.service";
 import {HttpFunction} from "@google-cloud/functions-framework";
-import puppeteer, {Browser, Page} from "puppeteer";
+
+import chromium from 'chrome-aws-lambda';
+import puppeteer, {Browser, Page} from 'puppeteer-core';
 
 dotenv.config();
 
@@ -42,7 +44,6 @@ async function analyzeDocument(page: Page, url: string, title: string, attachmen
         return {isInteresting: false, reasoning: 'Analysis failed.'};
     }
 }
-
 
 export async function clickDateInputField(page: Page): Promise<boolean> {
     const dateInput = await page.$('input[name="date"]');
@@ -153,6 +154,59 @@ function logAnnouncements(interestingAnnouncements: Announcement[],
     }
 }
 
+export function isNoise(title: string): boolean {
+    if (!title) return false;
+    const normalizedTitle = title.trim().toLowerCase();
+    return NOISE_PATTERNS.some(pattern =>
+        normalizedTitle.includes(pattern.toLowerCase())
+    );
+}
+
+export async function analyzeAnnouncements(page: Page,allAnnouncements: Omit<Announcement, 'sentiment'>[]): Promise<Announcement[]> {
+    const analyzedAnnouncements: Announcement[] = [];
+
+    for (const ann of allAnnouncements) {
+        if (isNoise(ann.title)) {
+            console.log(`🔇 Skipping noisy title: ${ann.title}`);
+            analyzedAnnouncements.push({
+                ...ann,
+                sentiment: {
+                    isInteresting: false,
+                    reasoning: 'Filtered out by title noise pattern.'
+                }
+            });
+            continue;
+        }
+
+        let sentiment: AnnouncementSentiment = {isInteresting: false, reasoning: 'No PDF found or analyzed.'};
+
+        console.log(`- - - - - - - - - ▶️  [Analyzing] "${ann.title}"`);
+
+        if (ann.attachments.length === 0) {
+            console.log(`   ❌ [Failed] No attachments found.`);
+            analyzedAnnouncements.push({...ann, sentiment});
+            continue;
+        }
+
+        let attachmentNumber = 1;
+        for (const attachment of ann.attachments) {
+            if (attachment.text.toLowerCase().includes('.pdf')) {
+                const analysis = await analyzeDocument(page, attachment.url, ann.title, attachmentNumber);
+                sentiment = analysis;
+                if (analysis.isInteresting) {
+                    console.log(`   ✅ [Interesting] Found significant event. Stopping analysis for this announcement.`);
+                    break;
+                }
+                await delay(5000);
+            }
+        }
+        analyzedAnnouncements.push({...ann, sentiment});
+    }
+
+    return analyzedAnnouncements;
+
+}
+
 export const idxScraper: HttpFunction = async (req, res) => {
     if (!process.env.GEMINI_APP_KEY) {
         console.error('❌ GEMINI_APP_KEY is not set');
@@ -163,10 +217,17 @@ export const idxScraper: HttpFunction = async (req, res) => {
     console.log('🚀 Starting IDX Scraper Cloud Function...');
 
     try {
+        // browser = await puppeteer.launch({
+        //     headless: false,
+        //     args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        // });
         browser = await puppeteer.launch({
-            headless: false,
-            args: ['--no-sandbox', '--disable-setuid-sandbox'],
+            args: chromium.args,
+            defaultViewport: chromium.defaultViewport,
+            executablePath: await chromium.executablePath,
+            headless: chromium.headless,
         });
+
         const page: Page = await browser.newPage();
 
         await page.goto(TARGET_URL, {waitUntil: 'networkidle2'});
@@ -179,47 +240,16 @@ export const idxScraper: HttpFunction = async (req, res) => {
         }
 
         const allAnnouncements: Omit<Announcement, 'sentiment'>[] = await extractAllAnnouncements(page);
-
-        const noiseRegex = new RegExp(NOISE_PATTERNS.join('|'), 'i');
-        const analyzedAnnouncements: Announcement[] = [];
         console.log(`Total of announcements: ${allAnnouncements.length}`)
 
-        for (const ann of allAnnouncements) {
-            if (noiseRegex.test(ann.title)) {
-                console.log(`🔇 Skipping noisy title: ${ann.title}`);
-                analyzedAnnouncements.push({
-                    ...ann,
-                    sentiment: {
-                        isInteresting: false,
-                        reasoning: 'Filtered out by title noise pattern.'
-                    }
-                });
-                continue;
-            }
-
-            let sentiment: AnnouncementSentiment = {isInteresting: false, reasoning: 'No PDF found or analyzed.'};
-
-            console.log(`- - - - - - - - - ▶️  [Analyzing] "${ann.title}"`);
-            let attachmentNumber = 1;
-            for (const attachment of ann.attachments) {
-                if (attachment.text.toLowerCase().includes('.pdf')) {
-                    const analysis = await analyzeDocument(page, attachment.url, ann.title, attachmentNumber);
-                    sentiment = analysis;
-                    if (analysis.isInteresting) {
-                        console.log(`   ✅ [Interesting] Found significant event. Stopping analysis for this announcement.`);
-                        break;
-                    }
-                    await delay(5000);
-                }
-            }
-            analyzedAnnouncements.push({...ann, sentiment});
-        }
+        const analyzedAnnouncements: Announcement[] = await analyzeAnnouncements(page, allAnnouncements);
 
         const interestingAnnouncements = analyzedAnnouncements.filter(ann => ann.sentiment.isInteresting);
         const skippedAnnouncements = analyzedAnnouncements.filter(ann => ann.sentiment.reasoning === 'Filtered out by title noise pattern.');
         const failedAnnouncements = analyzedAnnouncements.filter(ann => ann.sentiment.reasoning === 'Analysis failed.');
-        const uninterestingAnalyzedAnnouncements = analyzedAnnouncements.filter(ann => (!ann.sentiment.isInteresting && ann.sentiment.reasoning !== 'Analysis failed.') || (!ann.sentiment.isInteresting && ann.sentiment.reasoning !== 'Filtered out by title noise pattern.'));
 
+        const uninterestingAnalyzedAnnouncements = analyzedAnnouncements.filter(ann => (!ann.sentiment.isInteresting && ann.sentiment.reasoning !== 'Analysis failed.') );
+        const finalUninterestingAnnouncements = uninterestingAnalyzedAnnouncements.filter(ann => ann.sentiment.reasoning !== 'Filtered out by title noise pattern.');
 
         console.log(`
                 ========================================
@@ -229,14 +259,14 @@ export const idxScraper: HttpFunction = async (req, res) => {
 
         logAnnouncements(
             interestingAnnouncements,
-            uninterestingAnalyzedAnnouncements,
+            finalUninterestingAnnouncements,
             skippedAnnouncements,
             failedAnnouncements,
         )
 
         await sendEmailReport(
             interestingAnnouncements,
-            uninterestingAnalyzedAnnouncements,
+            finalUninterestingAnnouncements,
             skippedAnnouncements,
             failedAnnouncements,
         )
@@ -250,7 +280,7 @@ export const idxScraper: HttpFunction = async (req, res) => {
         res.status(500).send(`An unexpected error occurred: ${errorMessage}`);
     } finally {
         if (browser) {
-            await browser.close()
+            await browser.close();
         }
     }
 };
