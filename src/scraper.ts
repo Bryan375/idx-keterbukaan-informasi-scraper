@@ -45,18 +45,23 @@ async function analyzeDocument(page: Page, url: string, title: string, attachmen
 }
 
 export async function clickDateInputField(page: Page): Promise<boolean> {
-    const dateInput = await page.$('input[name="date"]');
+    try {
+        const dateInput = await page.waitForSelector('input[name="date"]', { timeout: 10000 });
 
-    if (!dateInput) return false;
+        if (!dateInput) return false;
 
-    await dateInput.click();
+        await dateInput.click();
 
-    console.log(`▶️  Scraping announcements for date: ${TODAY_DATE}`);
+        console.log(`▶️  Scraping announcements for date: ${TODAY_DATE}`);
 
-    await page.keyboard.type(`${TODAY_DATE} ~ ${TODAY_DATE}`);
-    await page.keyboard.press('Enter');
+        await page.keyboard.type(`${TODAY_DATE} ~ ${TODAY_DATE}`);
+        await page.keyboard.press('Enter');
 
-    return true;
+        return true;
+    } catch (error) {
+        console.error("❌ Failed to find or click the date input field on the page.", error);
+        return false;
+    }
 }
 
 export async function hasNextPage(page: Page): Promise<boolean> {
@@ -264,13 +269,11 @@ export const idxScraper: HttpFunction = async (req, res) => {
             failedAnnouncements,
         )
 
-        res.status(200).send('Scraping job completed successfully.');
-
-
+        console.log('Everything done!');
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         console.error('❌ An unexpected error occurred during scraping:', errorMessage);
-        res.status(500).send(`An unexpected error occurred: ${errorMessage}`);
+
     } finally {
         if (browser) {
             await browser.close();
