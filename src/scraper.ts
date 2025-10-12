@@ -45,7 +45,7 @@ async function analyzeDocument(page: Page, url: string, title: string, attachmen
 
 export async function clickDateInputField(page: Page): Promise<boolean> {
     try {
-        const dateInput = await page.waitForSelector('input[name="date"]', { timeout: 10000 });
+        const dateInput = await page.waitForSelector('input[name="date"]', { timeout: 25000 });
 
         if (!dateInput) return false;
 
@@ -59,6 +59,17 @@ export async function clickDateInputField(page: Page): Promise<boolean> {
         return true;
     } catch (error) {
         console.error("❌ Failed to find or click the date input field on the page.", error);
+
+        try {
+            console.log("📸 Taking a screenshot of the failure page...");
+            await page.screenshot({ path: 'error_screenshot.png', fullPage: true });
+            console.log("📄 Dumping page HTML...");
+            const html = await page.content();
+            require('node:fs').writeFileSync('error_page.html', html);
+            console.log("✅ Debug files saved: error_screenshot.png, error_page.html");
+        } catch (debugError) {
+            console.error("❌ Failed to save debug files.", debugError);
+        }
 
         return false;
     }
@@ -231,7 +242,7 @@ export const idxScraper = async () => {
         await page.setViewport({ width: 1920, height: 1080 });
         await page.setUserAgent({userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/57.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36'})
 
-        await page.goto(TARGET_URL, {waitUntil: 'networkidle2'});
+        await page.goto(TARGET_URL, {waitUntil: 'networkidle0'});
 
         const successClickedDate = await clickDateInputField(page);
 
