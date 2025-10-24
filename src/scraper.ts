@@ -4,13 +4,12 @@ import {TARGET_URL, NOISE_PATTERNS} from "./config/constants";
 import {getFormattedDate} from "./helpers/date.helper";
 import {sendEmailReport} from "./services/email.service";
 import {analyzePdfBuffer} from "./services/gemini.service";
-
 import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import {Browser, Page} from "puppeteer";
+import {Request, Response} from "express";
 
 puppeteer.use(StealthPlugin());
-
 
 dotenv.config();
 
@@ -64,18 +63,6 @@ export async function clickDateInputField(page: Page): Promise<boolean> {
         return true;
     } catch (error) {
         console.error("❌ Failed to find or click the date input field on the page.", error);
-
-        try {
-            console.log("📸 Taking a screenshot of the failure page...");
-            await page.screenshot({ path: 'error_screenshot.png', fullPage: true });
-            console.log("📄 Dumping page HTML...");
-            const html = await page.content();
-            require('node:fs').writeFileSync('error_page.html', html);
-            console.log("✅ Debug files saved: error_screenshot.png, error_page.html");
-        } catch (debugError) {
-            console.error("❌ Failed to save debug files.", debugError);
-        }
-
         return false;
     }
 }
@@ -227,7 +214,7 @@ export async function analyzeAnnouncements(page: Page,allAnnouncements: Omit<Ann
 
 }
 
-export const idxScraper = async () => {
+async function idxScraper() {
     if (!process.env.GEMINI_APP_KEY) {
         console.error('❌ GEMINI_APP_KEY is not set');
         return;
@@ -248,30 +235,6 @@ export const idxScraper = async () => {
         await page.setUserAgent({userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/57.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36'})
 
         await page.goto(TARGET_URL, {waitUntil: 'networkidle0'});
-
-        try {
-            console.log('Checking for Cloudflare challenge...');
-            const iframeHandle = await page.waitForSelector('iframe[src*="challenges.cloudflare.com"]', { timeout: 7000 });
-
-            if (iframeHandle) {
-                console.log('✅ Cloudflare challenge detected. Attempting to solve...');
-                const iframe = await iframeHandle.contentFrame();
-                if (iframe) {
-                    // Wait for the checkbox inside the iframe and click it
-                    const checkbox = await iframe.waitForSelector('input[type="checkbox"]', { timeout: 5000 });
-                    console.log('Cloudflare challenge found. Attempting to click checkbox...');
-                    if (checkbox) await checkbox.click();
-                    console.log('✅ Checkbox clicked. Waiting for navigation...');
-
-                    // Wait for the navigation that happens after a successful click
-                    await page.waitForNavigation({ timeout: 20000, waitUntil: 'networkidle2' });
-
-                    console.log('✅ Navigation complete. Cloudflare challenge passed!');
-                }
-            }
-        } catch (error) {
-            console.log('No Cloudflare challenge detected or failed to click, continuing...');
-        }
 
         const successClickedDate = await clickDateInputField(page);
 
@@ -323,6 +286,16 @@ export const idxScraper = async () => {
         }
     }
 };
+
+export const idxScraperEndpoint = (req: Request, res: Response) => {
+    console.log('▶️  IDX Scraper endpoint triggered.');
+    res.status(202).send('Scraper triggered successfully.');
+
+    idxScraper().catch(error => {
+        console.error('❌ An unexpected error occurred during scraping:', error);
+        res.status(500).send('An unexpected error occurred during scraping.');
+    })
+}
 
 if (require.main === module) {
     console.log("🚀 Running scraper directly via node...");

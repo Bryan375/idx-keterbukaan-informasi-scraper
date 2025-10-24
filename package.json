@@ -5,7 +5,7 @@
   "scripts": {
     "test": "jest",
     "build": "tsc",
-    "start": "functions-framework --target=idxScraper",
+    "start": "functions-framework --target=idxScraperEndpoint",
     "dev": "tsc && node dist/scraper.js"
   },
   "keywords": [],
@@ -26,6 +26,7 @@
     "typescript": "^5.9.2"
   },
   "devDependencies": {
+    "@types/express": "^5.0.4",
     "@types/jest": "^30.0.0",
     "@types/pdf-parse": "^1.1.5",
     "jest": "^30.2.0",
