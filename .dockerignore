@@ -1,0 +1,19 @@
+.git
+node_modules
+
+# Build output (it will be created inside the container)
+dist
+
+# Environment and log files
+.env
+*.log
+
+# Netlify and Python files (no longer needed)
+netlify.toml
+netlify/
+python/
+
+# IDE and OS files
+.idea
+.vscode
+.DS_Store
