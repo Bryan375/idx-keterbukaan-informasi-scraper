@@ -1,24 +1,31 @@
-FROM node:18-slim AS build
+FROM node:21.2.0-slim AS builder
 
-WORKDIR /usr/src/app
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
 
 COPY package*.json ./
-RUN npm install
+
+RUN npm ci
 
 COPY . .
 
 RUN npm run build
 
-FROM node:18-slim
+FROM node:21.2.0-slim AS runner
 
-WORKDIR /usr/src/app
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    chromium \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY package*.json ./
+WORKDIR /app
 
-RUN npm install --omit=dev
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
 
-COPY --from=build /usr/src/app/dist ./dist
+EXPOSE 8080
 
-EXPOSE 3000
-
-CMD [ "node", "dist/server.js"]
+CMD ["node", "dist/server.js"]
