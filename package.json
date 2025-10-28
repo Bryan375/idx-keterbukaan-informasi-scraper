@@ -6,6 +6,7 @@
     "test": "jest",
     "build": "tsc",
     "start": "node dist/server.js",
+    "scrape": "ts-node src/scraper.ts",
     "dev": "ts-node src/server.ts"
   },
   "keywords": [],
