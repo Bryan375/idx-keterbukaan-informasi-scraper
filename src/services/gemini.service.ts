@@ -25,6 +25,9 @@ Based on the text, answer with a JSON object in the following format and nothing
 Please provide the response in a valid JSON format like this
 "{ "isInteresting": boolean, "reasoning": "Explain why this is or is not an interesting event for an investor." }"
 
+If got error, please provide the error message in Indonesian in this format
+"{ "isInteresting": false, "reasoning": "Error: {{error message}}" }"
+
 For all reasoning, please provide the reasoning in Indonesian.
 `
 
