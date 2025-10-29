@@ -15,32 +15,6 @@ dotenv.config();
 
 const TODAY_DATE = getFormattedDate(new Date());
 
-function parseIndonesianDate(dateStr: string): Date {
-    try {
-        const months: { [key: string]: number } = {
-            'januari': 0, 'februari': 1, 'maret': 2, 'april': 3,
-            'mei': 4, 'juni': 5, 'juli': 6, 'agustus': 7,
-            'september': 8, 'oktober': 9, 'november': 10, 'desember': 11
-        };
-
-        const parts = dateStr.toLowerCase().split(' ');
-        if (parts.length >= 4) {
-            const day = Number.parseInt(parts[0]);
-            const month = months[parts[1]];
-            const year = Number.parseInt(parts[2]);
-            const timeParts = parts[3].split(':');
-            const hour = Number.parseInt(timeParts[0]);
-            const minute = Number.parseInt(timeParts[1]);
-            const second = Number.parseInt(timeParts[2] || '0');
-
-            return new Date(year, month, day, hour, minute, second);
-        }
-    } catch (error) {
-        console.error('Failed to parse date:', dateStr, error);
-    }
-    return new Date(0);
-}
-
 function isPdfUrl(url: string): boolean {
     return url.toLowerCase().endsWith('.pdf') || url.toLowerCase().includes('.pdf');
 }
@@ -332,13 +306,6 @@ async function idxScraper() {
 
         const allAnnouncements: Omit<Announcement, 'sentiment'>[] = await extractAllAnnouncements(page);
         console.log(`Total of announcements: ${allAnnouncements.length}`)
-
-        allAnnouncements.sort((a, b) => {
-            const dateA = parseIndonesianDate(a.time);
-            const dateB = parseIndonesianDate(b.time);
-            return dateB.getTime() - dateA.getTime();
-        });
-        console.log(`✅ Sorted announcements by time (newest first)`);
 
         const analyzedAnnouncements: Announcement[] = await analyzeAnnouncements(page, allAnnouncements);
 
