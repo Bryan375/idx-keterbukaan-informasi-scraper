@@ -31,40 +31,89 @@ If got error, please provide the error message in Indonesian in this format
 For all reasoning, please provide the reasoning in Indonesian.
 `
 
-export async function analyzePdfBuffer(buffer: Buffer): Promise<AnnouncementSentiment> {
+export async function extractPdfText(buffer: Buffer): Promise<{ text: string; isScanned: boolean }> {
     try {
         const data = await pdf(buffer);
         const documentText = data.text;
 
-        let result;
-
         if (documentText.trim().length < 100) {
-            console.log('      📝 PDF appears to be a scanned image. Switching to multimodal analysis.');
-            const imagePart = {
-                inlineData: {
-                    data: buffer.toString('base64'),
-                    mimeType: 'application/pdf'
-                }
-            };
-            const promptForImage = PROMPT_TEMPLATE.replace('{{documentText}}', 'The document text is contained in the attached PDF image.');
-            result = await GEMINI_MODEL.generateContent([promptForImage, imagePart]);
-        } else {
-            const prompt = PROMPT_TEMPLATE.replace('{{documentText}}', documentText.substring(0, 10000));
-            result = await GEMINI_MODEL.generateContent(prompt);
+            return {text: '', isScanned: true};
         }
 
-        const responseText = result.response.text();
-        const jsonRegex = /^```json\s*|\s*```$/g;
-        const jsonString = responseText.replace(jsonRegex, '');
-        const jsonResponse = JSON.parse(jsonString);
-
-        return {
-            isInteresting: jsonResponse.isInteresting || false,
-            reasoning: jsonResponse.reasoning || 'No reasoning provided.'
-        };
-
+        return {text: documentText, isScanned: false};
     } catch (error) {
-        console.error('   ❌ [Error] Failed to analyze document with Gemini:', error);
-        return { isInteresting: false, reasoning: 'Analysis failed due to an error.' };
+        console.error('   ❌ [Error] Failed to extract text from PDF:', error);
+        return {text: '', isScanned: false};
     }
+}
+
+export async function analyzeCombinedContent(
+    combinedText: string,
+    scannedPdfBuffers: Buffer[],
+    title: string
+): Promise<AnnouncementSentiment> {
+    const maxRetries = 5;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            let result;
+
+            if (scannedPdfBuffers.length > 0) {
+                console.log(`      📸 Analyzing ${scannedPdfBuffers.length} scanned PDF(s) with multimodal approach`);
+
+                const parts: any[] = [];
+
+                if (combinedText.trim().length > 0) {
+                    parts.push(`${PROMPT_TEMPLATE}\n\nJudul: ${title}\n\nKonten Teks:\n${combinedText.substring(0, 10000)}\n\nBerikut adalah PDF yang di-scan:`);
+                } else {
+                    parts.push(`${PROMPT_TEMPLATE}\n\nJudul: ${title}\n\nBerikut adalah PDF yang di-scan:`);
+                }
+
+                for (const element of scannedPdfBuffers) {
+                    parts.push({
+                        inlineData: {
+                            data: element.toString('base64'),
+                            mimeType: 'application/pdf'
+                        }
+                    });
+                }
+
+                result = await GEMINI_MODEL.generateContent(parts);
+            }
+            else if (combinedText.trim().length > 0) {
+                console.log(`      📝 Analyzing combined text (${combinedText.length} characters)`);
+                const prompt = `${PROMPT_TEMPLATE}\n\nJudul: ${title}\n\nKonten:\n${combinedText.substring(0, 20000)}`;
+                result = await GEMINI_MODEL.generateContent(prompt);
+            }
+            else {
+                return { isInteresting: false, reasoning: 'Tidak ada konten untuk dianalisis.' };
+            }
+
+            const responseText = result.response.text();
+            const jsonRegex = /(^```json\s*|```$)/g;
+            const jsonString = responseText.replaceAll(jsonRegex, '');
+            const jsonResponse = JSON.parse(jsonString);
+
+            return {
+                isInteresting: jsonResponse.isInteresting || false,
+                reasoning: jsonResponse.reasoning || 'Tidak ada alasan yang diberikan.'
+            };
+
+        } catch (error: any) {
+
+            const isRateLimitError = error?.status === 503 || error?.status === 429;
+
+            if (isRateLimitError && attempt < maxRetries) {
+                const waitTime = Math.pow(3, attempt) * 2500;
+                console.log(`      ⏳ Rate limit hit (${error.status}). Retrying in ${waitTime/1000}s... (Attempt ${attempt}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+                continue;
+            }
+
+            console.error('   ❌ [Error] Failed to analyze combined content with Gemini:', error);
+            break;
+        }
+    }
+
+    return { isInteresting: false, reasoning: 'Analisis gagal karena error setelah beberapa percobaan.' };
 }

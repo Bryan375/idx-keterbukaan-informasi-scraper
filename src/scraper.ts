@@ -3,7 +3,7 @@ import {AnnouncementSentiment, Announcement} from "./types/announcement";
 import {TARGET_URL, NOISE_PATTERNS} from "./config/constants";
 import {getFormattedDate} from "./helpers/date.helper";
 import {sendEmailReport} from "./services/email.service";
-import {analyzePdfBuffer} from "./services/gemini.service";
+import {analyzeCombinedContent, extractPdfText} from "./services/gemini.service";
 import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import {Browser, Page} from "puppeteer";
@@ -15,9 +15,40 @@ dotenv.config();
 
 const TODAY_DATE = getFormattedDate(new Date());
 
-async function analyzeDocument(page: Page, url: string, title: string, attachmentNumber: number): Promise<AnnouncementSentiment> {
+function parseIndonesianDate(dateStr: string): Date {
     try {
-        console.log(`📄 Analyzing document: ${title}-number(${attachmentNumber}) with this url: ${url}`);
+        const months: { [key: string]: number } = {
+            'januari': 0, 'februari': 1, 'maret': 2, 'april': 3,
+            'mei': 4, 'juni': 5, 'juli': 6, 'agustus': 7,
+            'september': 8, 'oktober': 9, 'november': 10, 'desember': 11
+        };
+
+        const parts = dateStr.toLowerCase().split(' ');
+        if (parts.length >= 4) {
+            const day = Number.parseInt(parts[0]);
+            const month = months[parts[1]];
+            const year = Number.parseInt(parts[2]);
+            const timeParts = parts[3].split(':');
+            const hour = Number.parseInt(timeParts[0]);
+            const minute = Number.parseInt(timeParts[1]);
+            const second = Number.parseInt(timeParts[2] || '0');
+
+            return new Date(year, month, day, hour, minute, second);
+        }
+    } catch (error) {
+        console.error('Failed to parse date:', dateStr, error);
+    }
+    return new Date(0);
+}
+
+function isPdfUrl(url: string): boolean {
+    return url.toLowerCase().endsWith('.pdf') || url.toLowerCase().includes('.pdf');
+}
+
+
+async function downloadPdfBuffer(page: Page, url: string, pdfLabel: string): Promise<Buffer | null> {
+    try {
+        console.log(`   📥 Downloading ${pdfLabel}: ${url}`);
         const pdfBufferAsBase64 = await page.evaluate((pdfUrl) => {
             return fetch(pdfUrl)
                 .then(response => {
@@ -27,7 +58,6 @@ async function analyzeDocument(page: Page, url: string, title: string, attachmen
                     return response.arrayBuffer();
                 })
                 .then(buffer => {
-
                     let binary = '';
                     const bytes = new Uint8Array(buffer);
                     const len = bytes.byteLength;
@@ -38,12 +68,11 @@ async function analyzeDocument(page: Page, url: string, title: string, attachmen
                 });
         }, url);
 
-        const buffer = Buffer.from(pdfBufferAsBase64, 'base64');
-        return await analyzePdfBuffer(Buffer.from(buffer));
+        return Buffer.from(pdfBufferAsBase64, 'base64');
 
     } catch (error) {
-        console.error(`❌ Failed to analyze document ${title}-number(${attachmentNumber}) with this url: ${url}`, error);
-        return {isInteresting: false, reasoning: 'Analysis failed.'};
+        console.error(`   ❌ Failed to download ${pdfLabel}:`, error);
+        return null;
     }
 }
 
@@ -86,13 +115,16 @@ export async function scrapeCurrentPage(page: Page): Promise<Omit<Announcement, 
             const time = card.querySelector('time')?.innerText.trim() || '';
             const title = card.querySelector('h6')?.innerText.trim() || '';
 
+            const titleLink = card.querySelector('h6 a') as HTMLAnchorElement;
+            const titleUrl = titleLink?.href || '';
+
             const attachmentLinks = card.querySelectorAll('ul li a');
             const attachments = Array.from(attachmentLinks).map(link => ({
                 text: (link as HTMLElement).innerText.trim(),
                 url: (link as HTMLAnchorElement).href,
             }));
 
-            data.push({time, title, attachments});
+            data.push({time, title, titleUrl, attachments});
         }
 
         return data;
@@ -169,7 +201,10 @@ export function isNoise(title: string): boolean {
     );
 }
 
-export async function analyzeAnnouncements(page: Page,allAnnouncements: Omit<Announcement, 'sentiment'>[]): Promise<Announcement[]> {
+export async function analyzeAnnouncements(
+    page: Page,
+    allAnnouncements: Omit<Announcement, 'sentiment'>[]
+): Promise<Announcement[]> {
     const analyzedAnnouncements: Announcement[] = [];
 
     for (const ann of allAnnouncements) {
@@ -185,34 +220,86 @@ export async function analyzeAnnouncements(page: Page,allAnnouncements: Omit<Ann
             continue;
         }
 
-        let sentiment: AnnouncementSentiment = {isInteresting: false, reasoning: 'No PDF found or analyzed.'};
+        console.log(`\n- - - - - - - - - ▶️  [Analyzing] [${ann.time}] "${ann.title}"`);
 
-        console.log(`- - - - - - - - - ▶️  [Analyzing] "${ann.title}"`);
+        const allPdfUrls: { url: string; label: string }[] = [];
 
-        if (ann.attachments.length === 0) {
-            console.log(`   ❌ [Failed] No attachments found.`);
-            analyzedAnnouncements.push({...ann, sentiment});
-            continue;
+        if (ann.titleUrl && isPdfUrl(ann.titleUrl)) {
+            allPdfUrls.push({ url: ann.titleUrl, label: 'Title PDF' });
         }
 
-        let attachmentNumber = 1;
-        for (const attachment of ann.attachments) {
-            if (attachment.text.toLowerCase().includes('.pdf')) {
-                const analysis = await analyzeDocument(page, attachment.url, ann.title, attachmentNumber);
-                sentiment = analysis;
-                if (analysis.isInteresting) {
-                    console.log(`   ✅ [Interesting] Found significant event. Stopping analysis for this announcement.`);
-                    break;
+        const pdfAttachments = ann.attachments.filter(att =>
+            att.text.toLowerCase().includes('.pdf') || isPdfUrl(att.url)
+        );
+
+        for (const att of pdfAttachments) {
+            const index = pdfAttachments.indexOf(att);
+            allPdfUrls.push({ url: att.url, label: `Attachment PDF ${index + 1}` });
+        }
+
+        let sentiment: AnnouncementSentiment;
+
+        if (allPdfUrls.length > 0) {
+            console.log(`   📚 Found ${allPdfUrls.length} PDF(s) total (including title). Downloading all...`);
+
+            const pdfBuffers: Buffer[] = [];
+
+            for (const pdfInfo of allPdfUrls) {
+                const buffer = await downloadPdfBuffer(page, pdfInfo.url, pdfInfo.label);
+                if (buffer) {
+                    pdfBuffers.push(buffer);
                 }
-                await delay(5000);
+                await delay(2000);
+            }
+
+            if (pdfBuffers.length === 0) {
+                console.log(`   ❌ Failed to download any PDFs`);
+                sentiment = { isInteresting: false, reasoning: 'Gagal mengunduh PDF.' };
+            } else {
+                console.log(`   ✅ Successfully downloaded ${pdfBuffers.length} PDF(s). Extracting text...`);
+
+                const combinedTexts: string[] = [];
+                const scannedPdfBuffers: Buffer[] = [];
+
+                for (let i = 0; i < pdfBuffers.length; i++) {
+                    const { text, isScanned } = await extractPdfText(pdfBuffers[i]);
+
+                    if (isScanned) {
+                        console.log(`      📸 PDF ${i + 1} is a scanned image`);
+                        scannedPdfBuffers.push(pdfBuffers[i]);
+                    } else if (text.trim().length > 0) {
+                        console.log(`      📝 PDF ${i + 1} has ${text.length} characters of text`);
+                        combinedTexts.push(`\n--- PDF ${i + 1} ---\n${text}`);
+                    }
+                }
+
+                const combinedText = combinedTexts.join('\n\n');
+
+
+                console.log(`   🔍 Analyzing combined content (${combinedText.length} chars text + ${scannedPdfBuffers.length} scanned PDFs)...`);
+
+                sentiment = await analyzeCombinedContent(combinedText, scannedPdfBuffers, ann.title);
+
+                if (sentiment.isInteresting) {
+                    console.log(`   ✅ [Interesting] Found significant event! ${sentiment.reasoning}`);
+                } else {
+                    console.log(`   ℹ️  [Not Interesting] ${sentiment.reasoning}`);
+                }
             }
         }
+        else {
+            console.log(`   ⚠️  No PDFs found in title or attachments.`);
+            sentiment = { isInteresting: false, reasoning: 'Tidak ada PDF untuk dianalisis.' };
+        }
+
         analyzedAnnouncements.push({...ann, sentiment});
+
+        await delay(5000);
     }
 
     return analyzedAnnouncements;
-
 }
+
 
 async function idxScraper() {
     if (!process.env.GEMINI_APP_KEY) {
@@ -221,7 +308,7 @@ async function idxScraper() {
     }
     let browser: Browser | null = null;
 
-    console.log('🚀 Starting IDX Scraper Cloud Function...');
+    console.log('🚀 Starting IDX Scraper...');
 
     try {
         browser = await puppeteer.launch({
@@ -245,6 +332,13 @@ async function idxScraper() {
 
         const allAnnouncements: Omit<Announcement, 'sentiment'>[] = await extractAllAnnouncements(page);
         console.log(`Total of announcements: ${allAnnouncements.length}`)
+
+        allAnnouncements.sort((a, b) => {
+            const dateA = parseIndonesianDate(a.time);
+            const dateB = parseIndonesianDate(b.time);
+            return dateB.getTime() - dateA.getTime();
+        });
+        console.log(`✅ Sorted announcements by time (newest first)`);
 
         const analyzedAnnouncements: Announcement[] = await analyzeAnnouncements(page, allAnnouncements);
 
@@ -285,7 +379,7 @@ async function idxScraper() {
             await browser.close();
         }
     }
-};
+}
 
 export const idxScraperEndpoint = (req: Request, res: Response) => {
     console.log('▶️  IDX Scraper endpoint triggered.');
@@ -298,6 +392,5 @@ export const idxScraperEndpoint = (req: Request, res: Response) => {
 }
 
 if (require.main === module) {
-    console.log("🚀 Running scraper directly via node...");
     idxScraper();
 }

@@ -6,6 +6,7 @@ export interface AnnouncementSentiment {
 export interface Announcement {
     time: string;
     title: string;
+    titleUrl: string;
     attachments: { text: string; url: string }[];
     sentiment: AnnouncementSentiment;
 }
