@@ -9,16 +9,24 @@ export const NOISE_PATTERNS: string[] = [
     'Laporan Jumlah Structured Warrant Beredar',
     'Laporan Bulanan Aktivitas Eksplorasi',
 
+
     // Ownership and administrative changes
     'Laporan Kepemilikan Saham',
+    'Pencatatan Saham',
     'Perubahan Corporate Secretary',
     'Perubahan Internal Audit',
     'Perubahan Komite Audit',
     'Perubahan Komite Nominasi dan Remunerasi',
+    'Pencatatan Structured Warrant',
+    'Warrant',
+    'Structured Warrant',
 
     // Routine notifications
-    'Penyampaian Bukti Iklan',
-    'Penyampaian Materi Public Expose',
+    'Pencatatan Tambahan ETF',
     'Informasi Kupon',
-    'Jatuh Tempo'
+    'Jatuh Tempo',
+    'Jadwal Dividen Tunai',
+    'Dividen'
+
+
 ];
