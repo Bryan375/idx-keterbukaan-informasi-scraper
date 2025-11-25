@@ -51,6 +51,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
+# Verify Chromium installation and find actual binary
+RUN echo "\n=== Verifying Chromium Installation ===" && \
+    echo "Checking /usr/bin/chromium:" && \
+    ls -lh /usr/bin/chromium && \
+    echo "\nSearching for actual Chromium binary in /usr/lib:" && \
+    find /usr/lib -name "chromium" -type f 2>/dev/null | head -10 && \
+    echo "\nTesting Chromium execution:" && \
+    /usr/bin/chromium --version && \
+    echo "\n✅ Chromium verification complete!\n"
+
 # Set environment variables for Chromium
 ENV CHROMIUM_PATH=/usr/bin/chromium \
     PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \

@@ -295,14 +295,50 @@ async function idxScraper() {
             const fs = require('fs');
             if (executablePath && fs.existsSync(executablePath)) {
                 const stats = fs.statSync(executablePath);
-                console.log(`✅ Chromium binary exists at ${executablePath}`);
+                console.log(`✅ Chromium path exists at ${executablePath}`);
                 console.log(`📄 File size: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
                 console.log(`🔒 Permissions: ${stats.mode.toString(8)}`);
+                
+                // Check if it's a symlink
+                const lstat = fs.lstatSync(executablePath);
+                if (lstat.isSymbolicLink()) {
+                    const realPath = fs.realpathSync(executablePath);
+                    console.log(`🔗 It's a symlink pointing to: ${realPath}`);
+                    
+                    if (fs.existsSync(realPath)) {
+                        const realStats = fs.statSync(realPath);
+                        console.log(`✅ Real binary exists at ${realPath}`);
+                        console.log(`📄 Real file size: ${(realStats.size / 1024 / 1024).toFixed(2)} MB`);
+                    } else {
+                        console.error(`❌ Real binary NOT found at ${realPath}`);
+                    }
+                }
+                
+                // If file size is 0, it's likely a wrapper script
+                if (stats.size === 0 || stats.size < 1000) {
+                    console.warn(`⚠️  WARNING: File is too small (${stats.size} bytes) - likely a wrapper script`);
+                    console.log(`🔍 Searching for actual Chromium binary...`);
+                    
+                    // Common Chromium locations
+                    const possiblePaths = [
+                        '/usr/lib/chromium/chromium',
+                        '/usr/lib/chromium-browser/chromium-browser',
+                        '/snap/bin/chromium',
+                        '/usr/bin/chromium-browser'
+                    ];
+                    
+                    for (const testPath of possiblePaths) {
+                        if (fs.existsSync(testPath)) {
+                            const testStats = fs.statSync(testPath);
+                            console.log(`✅ Found: ${testPath} (${(testStats.size / 1024 / 1024).toFixed(2)} MB)`);
+                        }
+                    }
+                }
             } else {
                 console.error(`❌ Chromium binary NOT found at ${executablePath}`);
             }
         } catch (fsError) {
-            console.error(`⚠️ Could not check Chromium binary:`, fsError);
+            console.error(`⚠️  Could not check Chromium binary:`, fsError);
         }
 
         browser = await puppeteer.launch({
