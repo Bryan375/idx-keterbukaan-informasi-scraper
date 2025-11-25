@@ -282,7 +282,7 @@ async function idxScraper() {
     }
     let browser: Browser | null = null;
 
-    console.log('🚀 Starting IDX Scraper...');
+    console.log('🚀 Starting IDX Scraper...(New)');
 
     try {
         const executablePath = process.env.CHROMIUM_PATH || '/usr/bin/chromium' || undefined;
@@ -308,7 +308,6 @@ async function idxScraper() {
         console.log('✅ Page navigation completed');
         
 
-        // Get page information
         const pageTitle = await page.title();
         const pageUrl = page.url();
         console.log(`📄 Page Title: "${pageTitle}"`);
