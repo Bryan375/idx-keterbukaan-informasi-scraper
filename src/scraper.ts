@@ -298,7 +298,19 @@ async function idxScraper() {
         await page.setViewport({ width: 1920, height: 1080 });
         await page.setUserAgent({userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/57.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36'})
 
+        await page.setViewport({
+            width: Math.floor(1024 + Math.random() * 100),
+            height: Math.floor(768 + Math.random() * 100),
+        });
+
         await page.goto(TARGET_URL, {waitUntil: 'networkidle0'});
+
+        const isCaptcha = await page.$('iframe[src*="captcha"], iframe[src*="turnstile"]');
+
+        if (isCaptcha) {
+            console.log('CAPTCHA triggered');
+            return;
+        }
 
         const successClickedDate = await clickDateInputField(page);
 
