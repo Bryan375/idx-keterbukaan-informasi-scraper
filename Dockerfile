@@ -62,9 +62,9 @@ RUN echo "\n=== Verifying Chromium Installation ===" && \
     echo "\n✅ Chromium verification complete!\n"
 
 # Set environment variables for Chromium
-ENV CHROMIUM_PATH=/usr/bin/chromium \
+ENV CHROMIUM_PATH=/usr/bin/chromium/chromium \
     PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium/chromium
 
 WORKDIR /app
 

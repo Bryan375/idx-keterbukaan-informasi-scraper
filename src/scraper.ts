@@ -285,7 +285,7 @@ async function idxScraper() {
     console.log('🚀 Starting IDX Scraper...(New)');
 
     try {
-        const executablePath = process.env.CHROMIUM_PATH || '/usr/bin/chromium' || undefined;
+        const executablePath = process.env.CHROMIUM_PATH || '/usr/bin/chromium/chromium' || undefined;
         
         console.log(`🔧 Attempting to launch browser...`);
         console.log(`📂 Executable path: ${executablePath}`);
