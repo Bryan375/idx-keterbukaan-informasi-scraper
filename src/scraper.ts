@@ -291,6 +291,20 @@ async function idxScraper() {
         console.log(`📂 Executable path: ${executablePath}`);
         console.log(`⏱️  Launch timeout: 60 seconds`);
 
+        try {
+            const fs = require('fs');
+            if (executablePath && fs.existsSync(executablePath)) {
+                const stats = fs.statSync(executablePath);
+                console.log(`✅ Chromium binary exists at ${executablePath}`);
+                console.log(`📄 File size: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+                console.log(`🔒 Permissions: ${stats.mode.toString(8)}`);
+            } else {
+                console.error(`❌ Chromium binary NOT found at ${executablePath}`);
+            }
+        } catch (fsError) {
+            console.error(`⚠️ Could not check Chromium binary:`, fsError);
+        }
+
         browser = await puppeteer.launch({
             headless: true,
             executablePath: executablePath,
