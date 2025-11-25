@@ -52,7 +52,7 @@ async function downloadPdfBuffer(page: Page, url: string, pdfLabel: string): Pro
 
 export async function clickDateInputField(page: Page): Promise<boolean> {
     try {
-        const dateInput = await page.waitForSelector('input[name="date"]', { timeout: 25000 });
+        const dateInput = await page.waitForSelector('input[name="date"]', { timeout: 5000 });
 
         if (!dateInput) return false;
 
@@ -303,14 +303,97 @@ async function idxScraper() {
             height: Math.floor(768 + Math.random() * 100),
         });
 
-        await page.goto(TARGET_URL, {waitUntil: 'networkidle0'});
+        await page.goto(TARGET_URL, {waitUntil: 'networkidle0', timeout: 60000});
 
-        const isCaptcha = await page.$('iframe[src*="captcha"], iframe[src*="turnstile"]');
+        console.log('✅ Page navigation completed');
+        
 
-        if (isCaptcha) {
-            console.log('CAPTCHA triggered');
+        // Get page information
+        const pageTitle = await page.title();
+        const pageUrl = page.url();
+        console.log(`📄 Page Title: "${pageTitle}"`);
+        console.log(`🔗 Page URL: ${pageUrl}`);
+        
+        // Comprehensive bot detection check
+        console.log('🔍 Checking for Cloudflare/Bot detection...');
+        
+        const botDetectionResult = await page.evaluate(() => {
+            const bodyText = document.body.innerText;
+            const title = document.title.toLowerCase();
+            const bodyLower = bodyText.toLowerCase();
+            
+            return {
+                // Page info
+                title: document.title,
+                bodyPreview: bodyText.substring(0, 1000),
+                
+                // Title checks
+                titleHasChallenge: title.includes('just a moment') ||
+                                   title.includes('attention required') ||
+                                   title.includes('please wait') ||
+                                   title.includes('checking'),
+                
+                // Body text checks
+                bodyHasCloudflare: bodyLower.includes('cloudflare'),
+                bodyHasChecking: bodyLower.includes('checking your browser'),
+                bodyHasVerify: bodyLower.includes('verify you are human'),
+                bodyHasChallenge: bodyLower.includes('challenge'),
+                bodyHasWait: bodyLower.includes('please wait'),
+                
+                // Element checks
+                hasCaptchaIframe: !!document.querySelector('iframe[src*="captcha"], iframe[src*="turnstile"], iframe[src*="challenges.cloudflare"]'),
+                hasCloudflareDiv: !!document.querySelector('#challenge-running, #challenge-stage, .cf-browser-verification, .cf-challenge-running, [class*="cloudflare"]'),
+                hasChallengeScript: !!document.querySelector('script[src*="challenges.cloudflare"], script[src*="challenge-platform"]'),
+                
+                // Check if page is mostly empty (common with challenges)
+                bodyLength: bodyText.length,
+                hasMinimalContent: bodyText.length < 500
+            };
+        });
+        
+        // Log all detection results
+        console.log('\n🔍 Detection Results:');
+        console.log('  📄 Title:', botDetectionResult.title);
+        console.log('  ❓ Title has challenge keywords:', botDetectionResult.titleHasChallenge);
+        console.log('  ☁️  Body mentions Cloudflare:', botDetectionResult.bodyHasCloudflare);
+        console.log('  🔄 Body has "checking your browser":', botDetectionResult.bodyHasChecking);
+        console.log('  ✋ Body has "verify you are human":', botDetectionResult.bodyHasVerify);
+        console.log('  🎯 Body has "challenge":', botDetectionResult.bodyHasChallenge);
+        console.log('  ⏳ Body has "please wait":', botDetectionResult.bodyHasWait);
+        console.log('  🖼️  Has CAPTCHA iframe:', botDetectionResult.hasCaptchaIframe);
+        console.log('  🛡️  Has Cloudflare div:', botDetectionResult.hasCloudflareDiv);
+        console.log('  📜 Has challenge script:', botDetectionResult.hasChallengeScript);
+        console.log('  📏 Body text length:', botDetectionResult.bodyLength);
+        console.log('  📭 Has minimal content:', botDetectionResult.hasMinimalContent);
+        console.log('\n📝 Body text preview:');
+        console.log(botDetectionResult.bodyPreview);
+        console.log('\n');
+        
+        const isBlocked = botDetectionResult.titleHasChallenge ||
+                         (botDetectionResult.bodyHasCloudflare && (botDetectionResult.bodyHasChecking || botDetectionResult.bodyHasVerify)) ||
+                         botDetectionResult.hasCaptchaIframe ||
+                         botDetectionResult.hasCloudflareDiv ||
+                         botDetectionResult.hasChallengeScript;
+        
+        if (isBlocked) {
+            console.log('❌❌❌ BLOCKED BY BOT DETECTION / CLOUDFLARE ❌❌❌');
+
+            console.log('\n⚠️  The scraper has been blocked by bot detection.');
+            console.log('\n📸 Screenshots saved:');
+            console.log('   - /tmp/after-page-load-*.png');
+            console.log('   - /tmp/BLOCKED-cloudflare-challenge-*.png');
+            console.log('\n🔧 To view screenshots:');
+            console.log('   curl http://localhost:8080/screenshots');
+            console.log('\n💡 Solutions:');
+            console.log('   1. Use residential proxies');
+            console.log('   2. Use Browserless.io or similar service');
+            console.log('   3. Add more anti-detection measures');
+            console.log('   4. Try running at different times');
+            
             return;
         }
+        
+        console.log('✅ No bot detection found - proceeding with scraping');
 
         const successClickedDate = await clickDateInputField(page);
 
