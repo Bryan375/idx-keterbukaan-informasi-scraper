@@ -341,26 +341,51 @@ async function idxScraper() {
             console.error(`⚠️  Could not check Chromium binary:`, fsError);
         }
 
-        browser = await puppeteer.launch({
-            headless: true,
-            executablePath: executablePath,
-            timeout: 60000, // 60 seconds instead of default 30
-            dumpio: true, // Print browser process stdout/stderr to console
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-gpu',
-                '--disable-software-rasterizer',
-                '--disable-dev-shm-usage'
-            ]
-        });
+        console.log(`\n🚀 Launching Chromium now...`);
         
-        console.log('✅ Browser launched successfully!');
-        console.log(`🌐 Browser version: ${await browser.version()}`);
-        console.log(`🔗 WebSocket endpoint: ${browser.wsEndpoint()}`);
-        console.log(`📊 Number of pages: ${(await browser.pages()).length}`);
-        console.log('');
+        try {
+            browser = await puppeteer.launch({
+                headless: true,
+                executablePath: executablePath,
+                timeout: 60000, // 60 seconds instead of default 30
+                dumpio: true, // Print browser process stdout/stderr to console
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-gpu',
+                    '--disable-software-rasterizer',
+                    '--single-process', // Run in single process mode
+                    '--no-zygote' // Don't use zygote process
+                ]
+            });
+            
+            console.log('\n✅ Browser launched successfully!');
+            console.log(`🌐 Browser version: ${await browser.version()}`);
+            console.log(`🔗 WebSocket endpoint: ${browser.wsEndpoint()}`);
+            console.log(`📊 Number of pages: ${(await browser.pages()).length}`);
+            console.log('');
+            
+        } catch (launchError: any) {
+            console.error(`\n❌❌❌ BROWSER LAUNCH FAILED ❌❌❌`);
+            console.error(`Error type: ${launchError.constructor.name}`);
+            console.error(`Error message: ${launchError.message}`);
+            console.error(`\nFull error:`);
+            console.error(launchError);
+            
+            // Additional diagnostics
+            console.error(`\n🔍 Diagnostics:`);
+            console.error(`  - Node version: ${process.version}`);
+            console.error(`  - Platform: ${process.platform}`);
+            console.error(`  - Architecture: ${process.arch}`);
+            console.error(`  - CWD: ${process.cwd()}`);
+            console.error(`  - Environment variables:`);
+            console.error(`    CHROMIUM_PATH: ${process.env.CHROMIUM_PATH || 'not set'}`);
+            console.error(`    PUPPETEER_EXECUTABLE_PATH: ${process.env.PUPPETEER_EXECUTABLE_PATH || 'not set'}`);
+            
+            throw launchError; // Re-throw to be caught by outer catch
+        }
+
 
         const page: Page = await browser.newPage();
 
