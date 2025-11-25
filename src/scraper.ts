@@ -285,9 +285,12 @@ async function idxScraper() {
     console.log('🚀 Starting IDX Scraper...');
 
     try {
+        const executablePath = process.env.CHROMIUM_PATH || '/usr/bin/chromium' || undefined;
+
         browser = await puppeteer.launch({
             headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
+            executablePath: executablePath,
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
         });
 
         const page: Page = await browser.newPage();
