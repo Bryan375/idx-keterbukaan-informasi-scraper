@@ -286,12 +286,31 @@ async function idxScraper() {
 
     try {
         const executablePath = process.env.CHROMIUM_PATH || '/usr/bin/chromium' || undefined;
+        
+        console.log(`🔧 Attempting to launch browser...`);
+        console.log(`📂 Executable path: ${executablePath}`);
+        console.log(`⏱️  Launch timeout: 60 seconds`);
 
         browser = await puppeteer.launch({
             headless: true,
             executablePath: executablePath,
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+            timeout: 60000, // 60 seconds instead of default 30
+            dumpio: true, // Print browser process stdout/stderr to console
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
+                '--disable-software-rasterizer',
+                '--disable-dev-shm-usage'
+            ]
         });
+        
+        console.log('✅ Browser launched successfully!');
+        console.log(`🌐 Browser version: ${await browser.version()}`);
+        console.log(`🔗 WebSocket endpoint: ${browser.wsEndpoint()}`);
+        console.log(`📊 Number of pages: ${(await browser.pages()).length}`);
+        console.log('');
 
         const page: Page = await browser.newPage();
 
