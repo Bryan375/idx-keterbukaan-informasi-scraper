@@ -305,7 +305,22 @@ async function idxScraper() {
                     '--disable-gpu',
                     '--disable-software-rasterizer',
                     '--single-process', // Run in single process mode
-                    '--no-zygote' // Don't use zygote process
+                    '--no-zygote', // Don't use zygote process
+                    '--disable-features=VizDisplayCompositor', // Disable compositor
+                    '--disable-dev-profile', // Disable dev profile
+                    '--disable-extensions', // Disable extensions
+                    '--disable-background-networking', // Disable background networking
+                    '--disable-sync', // Disable sync
+                    '--disable-translate', // Disable translate
+                    '--disable-default-apps', // Disable default apps
+                    '--no-first-run', // Skip first run wizards
+                    '--disable-breakpad', // Disable crash reporter
+                    '--disable-component-update', // Disable component updates
+                    '--disable-domain-reliability', // Disable domain reliability
+                    '--disable-features=AudioServiceOutOfProcess', // Run audio in-process
+                    '--disable-features=IsolateOrigins,site-per-process', // Disable site isolation
+                    '--disable-ipc-flooding-protection', // Disable IPC flooding protection
+                    '--mute-audio' // Mute audio
                 ]
             });
             
